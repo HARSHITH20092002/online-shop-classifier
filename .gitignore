@@ -13,3 +13,6 @@ data/processed/*
 .vscode/
 .DS_Store
 data/*.parquet
+
+data/*.csv
+*.csv

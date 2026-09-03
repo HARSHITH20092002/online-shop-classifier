@@ -1,80 +1,155 @@
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+import json
+import re
+from urllib.parse import urlparse
 
 class DualShopClassifier:
     def __init__(self):
-        # Solution 1: Explicit transactional markers & retail indicators
-        self.strong_keywords = {
-            'add to cart', 'add to basket', 'checkout', 'shopping cart', 'view cart', 
-            'buy now', 'my cart', 'panier', 'commander', 'ajouter au panier', 
-            'achat en ligne', 'mon panier', 'free shipping', 'livraison gratuite'
-        }
-        self.secondary_keywords = {
-            'cart', 'basket', 'price', 'shop', 'store', 'boutique', 'vente', 'achat',
-            'promotions', 'soldes', 'catalog', 'catalogue', 'retrait magasin', '$', '£', '€'
-        }
-        
-        # Solution 2: Machine Learning Model Setup
-        self.vectorizer = TfidfVectorizer(max_features=500)
-        self.ml_model = LogisticRegression()
-        self._train_dummy_ml_baseline()
-
-    def _train_dummy_ml_baseline(self):
-        training_corpus = [
-            # E-Commerce Samples (1)
-            "buy products add to cart free shipping secure checkout price product item order summary delivery store catalog boutique livraison commander",
-            "shop online discount store items add to basket sale add to cart fast shipping categories catalog buy now cart achat en ligne promo boutique",
-            "electronics store buy online add to cart view cart checkout currency deals discount items search product outillage brico matériel vente prix",
-            "temu online shopping deals discounts fashion home electronics free shipping savings shop now",
-            
-            # Non-Shop Samples (0)
-            "latest news articles blog post daily update editorial contact us privacy policy terms search main page read article actualités publication",
-            "company profile global services team about us leadership career investors media release overview corporate details entreprise groupe",
-            "wikipedia encyclopedia article references external links edit page free content history repository study main page community portal livre ebook viewer PDF document reader online reader publication view book translate google search tool dictionary job careers application hire employee",
-            "academic research network publication paper citations author profile researchgate science journal"
+        self.excluded_platforms = [
+            "linkedin.com", "facebook.com", "twitter.com", "x.com", 
+            "instagram.com", "github.com", "stackoverflow.com", "wikipedia.org"
         ]
-        labels = [1, 1, 1, 1, 0, 0, 0, 0]
-        X = self.vectorizer.fit_transform(training_corpus)
-        self.ml_model.fit(X, labels)
+        self.marketplace_subpaths = [
+            r"/marketplace", r"/shop", r"/shopping", r"/store", r"/buy", r"/catalog"
+        ]
+        self.shop_keywords = {
+            "en": ["cart", "add to cart", "basket", "checkout", "buy now", "free shipping", "shopping cart", "order online"],
+            "fr": ["panier", "ajouter au panier", "commander", "livraison", "frais de port", "tva", "boutique", "mon panier"],
+            "de": ["warenkorb", "in den warenkorb", "kasse", "jetzt kaufen", "versandkosten", "inkl. mwst", "bestellen"],
+            "es": ["añadir al carrito", "cesta", "comprar ahora", "gastos de envío", "mi carrito", "precio"],
+            "it": ["carrello", "aggiungi al carrello", "cassa", "spedizione", "acquista ora", "mio carrello"]
+        }
+        self.non_shop_text_keywords = [
+            "flipbook", "pdf reader", "publish interactive", "digital magazine", 
+            "free trial", "annual subscription", "domain for sale"
+        ]
 
-    def solution_1_heuristics(self, data):
-        text = data["raw_text"]
-        links = " ".join(data["links"])
-        full_content = f"{text} {links}"
-        
-        strong_matches = [kw for kw in self.strong_keywords if kw in full_content]
-        secondary_matches = [kw for kw in self.secondary_keywords if kw in full_content]
-        
-        if len(strong_matches) >= 1 or len(secondary_matches) >= 2:
-            return {"is_shop": True, "confidence": 0.95, "method": "Solution 1 (Heuristic)"}
-            
+    def _extract_schema_ld_json(self, raw_html):
+        """Detects Schema.org e-commerce structured objects."""
+        if not raw_html or 'application/ld+json' not in raw_html.lower():
+            return None
+        try:
+            matches = re.findall(r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', raw_html, re.DOTALL | re.IGNORECASE)
+            for m in matches:
+                clean = m.strip()
+                if not clean:
+                    continue
+                try:
+                    data = json.loads(clean)
+                    items = data if isinstance(data, list) else [data]
+                    for item in items:
+                        if isinstance(item, dict):
+                            t = str(item.get('@type', '')).lower()
+                            if t in ['product', 'offer', 'aggregateoffer', 'store', 'onlinestore']:
+                                return f"Schema.org JSON-LD found (@type: {t})"
+                except Exception:
+                    for t in ['"product"', '"offer"', '"aggregateoffer"', '"store"']:
+                        if t in clean.lower():
+                            return f"Schema.org pattern match ({t})"
+        except Exception:
+            pass
         return None
 
-    def solution_2_ml(self, text):
-        """Machine Learning engine with strict 0.70 confidence threshold."""
-        X = self.vectorizer.transform([text])
-        shop_proba = float(self.ml_model.predict_proba(X)[0][1])  # Probability of class 1 (SHOP)
+    def solution_1_heuristics(self, data):
+        url = data.get("url", "").lower()
+        text = data.get("raw_text", "").lower()
+        source = data.get("data_source", "Live DOM")
         
-        # Enforce minimum 70% probability threshold for positive shop classification
-        if shop_proba >= 0.70:
+        parsed = urlparse(url)
+        hostname = parsed.netloc.replace("www.", "")
+        path = parsed.path
+
+        # 1. Social Platform Rules
+        is_social = any(p in hostname for p in self.excluded_platforms)
+        has_subpath = any(re.search(p, path) for p in self.marketplace_subpaths)
+        
+        if is_social and has_subpath:
             return {
-                "is_shop": True,
-                "confidence": round(shop_proba, 2),
-                "method": "Solution 2 (ML Engine)"
+                "is_shop": True, 
+                "confidence": 0.95, 
+                "method": "Solution 1 (Platform Marketplace)",
+                "reason": f"Social platform root '{hostname}' contained commercial marketplace subpath '{path}'."
             }
-        else:
+        if is_social:
             return {
-                "is_shop": False,
-                "confidence": round(1.0 - shop_proba, 2),
-                "method": "Solution 2 (ML Engine)"
+                "is_shop": False, 
+                "confidence": 0.95, 
+                "method": "Solution 1 (Platform Exclusion)",
+                "reason": f"Domain matches known non-shop social platform '{hostname}' without shop subpath."
             }
 
+        # 2. Document Reader / SaaS Exclusions
+        for non_kw in self.non_shop_text_keywords:
+            if non_kw in text:
+                return {
+                    "is_shop": False, 
+                    "confidence": 0.85, 
+                    "method": "Solution 1 (Content Exclusion)",
+                    "reason": f"Excluded due to non-shop service indicator: '{non_kw}' found in {source}."
+                }
+
+        # 3. Schema.org Metadata Verification
+        schema_found = self._extract_schema_ld_json(data.get("raw_text", ""))
+        if schema_found:
+            return {
+                "is_shop": True, 
+                "confidence": 0.98, 
+                "method": "Solution 1 (Schema.org JSON-LD)",
+                "reason": f"Embedded e-commerce microdata confirmed: {schema_found} in {source}."
+            }
+
+        # 4. Multi-Language Token Match
+        matched_tokens = []
+        for lang, keywords in self.shop_keywords.items():
+            for kw in keywords:
+                if kw in text:
+                    matched_tokens.append(f"{kw} [{lang.upper()}]")
+
+        if len(matched_tokens) >= 2 or (source == "Historical Search Snippet" and len(matched_tokens) >= 1):
+            return {
+                "is_shop": True, 
+                "confidence": 0.95, 
+                "method": f"Solution 1 (Multi-Lingual Heuristic via {source})",
+                "reason": f"Matched e-commerce purchase tokens: {', '.join(matched_tokens[:4])}."
+            }
+
+        return None
+
+    def solution_2_ml_engine(self, data):
+        text = data.get("raw_text", "").lower()
+        source = data.get("data_source", "Live DOM")
+        if not text:
+            return {
+                "is_shop": False, 
+                "confidence": 0.0, 
+                "method": "Failed Analysis",
+                "reason": f"No content available from live connection, archives, or historical snippets."
+            }
+
+        high_intent = ["add to cart", "ajouter au panier", "in den warenkorb", "añadir al carrito", "checkout", "panier", "warenkorb", "cesta"]
+        general_terms = ["price", "prix", "preis", "shipping", "livraison", "versand", "boutique", "shop", "store", "product", "produit"]
+
+        hi_count = sum(1 for term in high_intent if term in text)
+        gen_count = sum(1 for term in general_terms if term in text)
+
+        score = min(0.95, (hi_count * 0.40) + (gen_count * 0.15))
+        is_shop = score >= 0.50
+
+        return {
+            "is_shop": is_shop,
+            "confidence": round(score if is_shop else (1.0 - score), 2),
+            "method": f"Solution 2 (Probabilistic Scoring via {source})",
+            "reason": f"Calculated probability score ({score:.2f}) from {hi_count} high-intent and {gen_count} general retail keywords."
+        }
+
     def predict(self, page_data):
-        if not page_data:
-            return {"is_shop": False, "confidence": 0.0, "method": "Failed Fetch"}
-            
-        h_result = self.solution_1_heuristics(page_data)
-        if h_result:
-            return h_result
-            
-        return self.solution_2_ml(page_data["raw_text"])
+        if not page_data or not isinstance(page_data, dict):
+            page_data = {"raw_text": "", "url": "", "data_source": "Invalid Input"}
+
+        res = self.solution_1_heuristics(page_data)
+        if not res:
+            res = self.solution_2_ml_engine(page_data)
+
+        res["result"] = "SHOP" if res["is_shop"] else "NOT A SHOP"
+        return res
+
+ShopClassifier = DualShopClassifier
