@@ -1,4 +1,4 @@
-# GfK Online Shop Classifier
+# Online Shop Classifier
 
 So this is an intelligent dual way system that tries to discover , then fetch, and later classify web domains into **Shop** vs. **Non-Shop**. It kinda mixes heuristic web scraping rules with machine learning too, specifically TF-IDF plus Logistic Regression, in a hybrid manner.
 
@@ -19,7 +19,7 @@ So this is an intelligent dual way system that tries to discover , then fetch, a
 ## Project Architecture & Directory Structure
 
 ```text
-gfk-online-shop-classifier/
+online-shop-classifier/
 ├── data/                         # Dataset directory (.gitignore tracked)
 │   └── processed/                # Saved benchmark outputs and metrics
 ├── src/

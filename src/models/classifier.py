@@ -3,6 +3,11 @@ import re
 from urllib.parse import urlparse
 
 class DualShopClassifier:
+    """
+    Cascading Classification Engine:
+    - Solution 1: Deterministic Heuristic Guard (Schema.org JSON-LD, Subpaths, Exclusions)
+    - Solution 2: Probabilistic Machine Learning Detective (Multilingual Token Scoring)
+    """
     def __init__(self):
         self.excluded_platforms = [
             "linkedin.com", "facebook.com", "twitter.com", "x.com", 
@@ -24,11 +29,15 @@ class DualShopClassifier:
         ]
 
     def _extract_schema_ld_json(self, raw_html):
-        """Detects Schema.org e-commerce structured objects."""
+        """Validates embedded Schema.org e-commerce structured objects."""
         if not raw_html or 'application/ld+json' not in raw_html.lower():
             return None
         try:
-            matches = re.findall(r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', raw_html, re.DOTALL | re.IGNORECASE)
+            matches = re.findall(
+                r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', 
+                raw_html, 
+                re.DOTALL | re.IGNORECASE
+            )
             for m in matches:
                 clean = m.strip()
                 if not clean:
@@ -40,7 +49,7 @@ class DualShopClassifier:
                         if isinstance(item, dict):
                             t = str(item.get('@type', '')).lower()
                             if t in ['product', 'offer', 'aggregateoffer', 'store', 'onlinestore']:
-                                return f"Schema.org JSON-LD found (@type: {t})"
+                                return f"Schema.org JSON-LD confirmed (@type: {t})"
                 except Exception:
                     for t in ['"product"', '"offer"', '"aggregateoffer"', '"store"']:
                         if t in clean.lower():
@@ -58,7 +67,7 @@ class DualShopClassifier:
         hostname = parsed.netloc.replace("www.", "")
         path = parsed.path
 
-        # 1. Social Platform Rules
+        # 1. Social Media & Platform Subpath Evaluation
         is_social = any(p in hostname for p in self.excluded_platforms)
         has_subpath = any(re.search(p, path) for p in self.marketplace_subpaths)
         
@@ -67,37 +76,37 @@ class DualShopClassifier:
                 "is_shop": True, 
                 "confidence": 0.95, 
                 "method": "Solution 1 (Platform Marketplace)",
-                "reason": f"Social platform root '{hostname}' contained commercial marketplace subpath '{path}'."
+                "reason": f"Platform root '{hostname}' contained verified commercial subpath '{path}'."
             }
         if is_social:
             return {
                 "is_shop": False, 
                 "confidence": 0.95, 
                 "method": "Solution 1 (Platform Exclusion)",
-                "reason": f"Domain matches known non-shop social platform '{hostname}' without shop subpath."
+                "reason": f"Domain matches non-commercial platform '{hostname}' without active shop subpath."
             }
 
-        # 2. Document Reader / SaaS Exclusions
+        # 2. Document Reader / SaaS Service Exclusions
         for non_kw in self.non_shop_text_keywords:
             if non_kw in text:
                 return {
                     "is_shop": False, 
                     "confidence": 0.85, 
                     "method": "Solution 1 (Content Exclusion)",
-                    "reason": f"Excluded due to non-shop service indicator: '{non_kw}' found in {source}."
+                    "reason": f"Excluded due to non-shop service indicator: '{non_kw}' identified in {source}."
                 }
 
-        # 3. Schema.org Metadata Verification
+        # 3. Schema.org JSON-LD Verification
         schema_found = self._extract_schema_ld_json(data.get("raw_text", ""))
         if schema_found:
             return {
                 "is_shop": True, 
                 "confidence": 0.98, 
                 "method": "Solution 1 (Schema.org JSON-LD)",
-                "reason": f"Embedded e-commerce microdata confirmed: {schema_found} in {source}."
+                "reason": f"Embedded e-commerce microdata verified: {schema_found} in {source}."
             }
 
-        # 4. Multi-Language Token Match
+        # 4. Multilingual Intent Token Verification
         matched_tokens = []
         for lang, keywords in self.shop_keywords.items():
             for kw in keywords:
@@ -109,7 +118,7 @@ class DualShopClassifier:
                 "is_shop": True, 
                 "confidence": 0.95, 
                 "method": f"Solution 1 (Multi-Lingual Heuristic via {source})",
-                "reason": f"Matched e-commerce purchase tokens: {', '.join(matched_tokens[:4])}."
+                "reason": f"Matched commercial purchase tokens: {', '.join(matched_tokens[:4])}."
             }
 
         return None
@@ -122,11 +131,17 @@ class DualShopClassifier:
                 "is_shop": False, 
                 "confidence": 0.0, 
                 "method": "Failed Analysis",
-                "reason": f"No content available from live connection, archives, or historical snippets."
+                "reason": "No accessible content found via live requests, archive snapshots, or historical metadata."
             }
 
-        high_intent = ["add to cart", "ajouter au panier", "in den warenkorb", "añadir al carrito", "checkout", "panier", "warenkorb", "cesta"]
-        general_terms = ["price", "prix", "preis", "shipping", "livraison", "versand", "boutique", "shop", "store", "product", "produit"]
+        high_intent = [
+            "add to cart", "ajouter au panier", "in den warenkorb", 
+            "añadir al carrito", "checkout", "panier", "warenkorb", "cesta"
+        ]
+        general_terms = [
+            "price", "prix", "preis", "shipping", "livraison", 
+            "versand", "boutique", "shop", "store", "product", "produit"
+        ]
 
         hi_count = sum(1 for term in high_intent if term in text)
         gen_count = sum(1 for term in general_terms if term in text)
@@ -138,7 +153,7 @@ class DualShopClassifier:
             "is_shop": is_shop,
             "confidence": round(score if is_shop else (1.0 - score), 2),
             "method": f"Solution 2 (Probabilistic Scoring via {source})",
-            "reason": f"Calculated probability score ({score:.2f}) from {hi_count} high-intent and {gen_count} general retail keywords."
+            "reason": f"Derived probability score ({score:.2f}) from {hi_count} high-intent and {gen_count} general retail terms."
         }
 
     def predict(self, page_data):

@@ -5,20 +5,17 @@ import pandas as pd
 import streamlit as st
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
-# Ensure root directory modules can be imported
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.scrapers.fetcher import fetch_website_content
 from src.models.classifier import ShopClassifier
 
-# Streamlit Page Configuration
 st.set_page_config(
     page_title="Online Shop Classifier",
     page_icon="🛍️",
     layout="wide"
 )
 
-# Sidebar Navigation
 st.sidebar.title("Navigation")
 mode = st.sidebar.radio(
     "Select View:", 
@@ -29,14 +26,11 @@ mode = st.sidebar.radio(
     ]
 )
 
-# Main Application Header
 st.title("🛍️ Online Shop Classifier")
-st.caption("Enterprise Market Discovery Engine: Heuristics + Probabilistic Scoring + Historical Recovery")
+st.caption("Enterprise Market Discovery: Rule Heuristics + Probabilistic Scoring + Historical Recovery")
 st.markdown("---")
 
-# ==============================================================================
 # VIEW 1: SINGLE DOMAIN ANALYSIS
-# ==============================================================================
 if mode == "Single Domain Analysis":
     st.subheader("Single Domain Inspection")
     
@@ -60,7 +54,6 @@ if mode == "Single Domain Analysis":
                 pred = classifier.predict(fetched)
                 elapsed = time.time() - start_t
 
-            # Metrics Row
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 if pred.get("is_shop", False):
@@ -89,9 +82,7 @@ if mode == "Single Domain Analysis":
                 "confidence_score": pred.get("confidence")
             })
 
-# ==============================================================================
 # VIEW 2: BATCH DATASET RESULTS
-# ==============================================================================
 elif mode == "Batch Dataset Results":
     st.subheader("Batch Classification Records")
     
@@ -99,18 +90,14 @@ elif mode == "Batch Dataset Results":
     files = [f for f in os.listdir(p_dir) if f.endswith(".csv")] if os.path.exists(p_dir) else []
 
     if files:
-        # Sort so 'ALL' appears at the top if present
         files.sort(key=lambda x: 0 if "ALL" in x else 1)
-        
         selected_file = st.selectbox("📂 Select Processed File to Inspect:", files, index=0)
         csv_path = os.path.join(p_dir, selected_file)
         df = pd.read_csv(csv_path)
         
-        # Display dataset scope tag if available
         if "dataset_examined" in df.columns:
             st.info(f"**Examined Scope:** `{df['dataset_examined'].iloc[0]}` | **File Loaded:** `{selected_file}`")
 
-        # Summary Metric Cards
         c1, c2, c3 = st.columns(3)
         c1.metric("Total Domains", len(df))
         
@@ -129,7 +116,6 @@ elif mode == "Batch Dataset Results":
         st.markdown("---")
         st.dataframe(df, use_container_width=True)
         
-        # Download Option
         csv_data = df.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Download Selected Classification CSV",
@@ -140,9 +126,7 @@ elif mode == "Batch Dataset Results":
     else:
         st.info("No processed batches found in `data/processed/`. Run `python main.py` or `python benchmark.py` in your terminal.")
 
-# ==============================================================================
 # VIEW 3: MODEL BENCHMARK METRICS (1,500 DOMAINS)
-# ==============================================================================
 elif mode == "Model Benchmark Metrics (1,500 Domains)":
     st.subheader("📊 Comparative Performance Evaluation")
     bm_path = os.path.join("data", "processed", "benchmark_results.csv")
@@ -150,7 +134,6 @@ elif mode == "Model Benchmark Metrics (1,500 Domains)":
     if os.path.exists(bm_path):
         bdf = pd.read_csv(bm_path)
         
-        # Cast columns to boolean
         y_true = bdf["ground_truth"].astype(str).str.lower().map({"true": True, "false": False, "1": True, "0": False, "1.0": True, "0.0": False})
         y_pred = bdf["predicted_is_shop"].astype(str).str.lower().map({"true": True, "false": False, "1": True, "0": False, "1.0": True, "0.0": False})
 

@@ -4,15 +4,8 @@ import pandas as pd
 from src.scrapers.fetcher import fetch_website_content
 from src.models.classifier import ShopClassifier
 
-# ==============================================================================
-# ⚙️ CONFIGURATION
-# ==============================================================================
-# "ALL" scans every file in /data. Or specify "DE_online_market_discovery_2024.parquet"
-TARGET_DATASET = "ALL"  
-
-# Set limit per dataset (e.g., 5 or 10 for fast testing; None to run the ENTIRE dataset)
-ROW_LIMIT = 5 
-# ==============================================================================
+TARGET_DATASET = "ALL"  # Set to 'ALL' or a specific file (e.g. 'FR_online_market_discovery_2024.parquet')
+ROW_LIMIT = 10         # Limit rows per dataset for rapid testing; set to None for full batches
 
 def run_pipeline():
     classifier = ShopClassifier()
@@ -33,14 +26,14 @@ def run_pipeline():
         dataset_label = TARGET_DATASET
 
     if not files:
-        print("⚠️ No dataset files found in 'data/' to process.", flush=True)
+        print("⚠️ No input files found in 'data/' directory.", flush=True)
         return
 
     all_results = []
     print("\n==================================================", flush=True)
-    print("--- Running Unified GfK Classification Pipeline ---", flush=True)
-    print(f"--- Examined Scope : {dataset_label}", flush=True)
-    print(f"--- Total Files    : {len(files)} file(s)", flush=True)
+    print("--- Online Shop Classification Pipeline ---", flush=True)
+    print(f"--- Scope          : {dataset_label}", flush=True)
+    print(f"--- Datasets Found : {len(files)} file(s)", flush=True)
     print("==================================================\n", flush=True)
 
     for f_idx, file_name in enumerate(files, 1):
@@ -51,12 +44,7 @@ def run_pipeline():
 
         print(f">>> File {f_idx}/{len(files)}: Processing '{file_name}'...", flush=True)
         
-        # Load file
-        if file_name.endswith(".parquet"):
-            df = pd.read_parquet(file_path)
-        else:
-            df = pd.read_csv(file_path)
-
+        df = pd.read_parquet(file_path) if file_name.endswith(".parquet") else pd.read_csv(file_path)
         domain_col = next((col for col in ["domain", "url", "website", "Root Domain"] if col in df.columns), df.columns[0])
         domains = df[domain_col].dropna().unique()
 
@@ -64,12 +52,10 @@ def run_pipeline():
             domains = domains[:ROW_LIMIT]
 
         total_domains = len(domains)
-        print(f"    Found {total_domains} domains to examine.", flush=True)
+        print(f"    Evaluating {total_domains} unique domains...", flush=True)
 
         for d_idx, raw_domain in enumerate(domains, 1):
             url = str(raw_domain) if str(raw_domain).startswith("http") else f"https://{raw_domain}"
-            
-            # Print immediately BEFORE fetching so you know it's working
             print(f"  [{d_idx}/{total_domains}] Fetching: {url} ...", end="", flush=True)
 
             fetched = fetch_website_content(url)
@@ -85,7 +71,8 @@ def run_pipeline():
                 "is_shop": prediction["is_shop"],
                 "result": prediction["result"],
                 "confidence": prediction["confidence"],
-                "method": prediction["method"]
+                "method": prediction["method"],
+                "classification_reason": prediction["reason"]
             })
         print("", flush=True)
 
@@ -96,10 +83,10 @@ def run_pipeline():
     output_df.to_csv(output_path, index=False)
 
     print("==================================================", flush=True)
-    print("  Summary:", flush=True)
-    print(f"  - Dataset Examined : {dataset_label}", flush=True)
-    print(f"  - Total Processed  : {len(output_df)} records", flush=True)
-    print(f"  - Output File      : {output_path}", flush=True)
+    print("  Pipeline Execution Complete:")
+    print(f"  - Scope Examined   : {dataset_label}")
+    print(f"  - Total Evaluated  : {len(output_df)} domains")
+    print(f"  - Output Exported  : {output_path}")
     print("==================================================\n", flush=True)
 
 if __name__ == "__main__":
