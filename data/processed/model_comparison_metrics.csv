@@ -1,0 +1,4 @@
+Model / Method,Accuracy (%),Precision (%),Recall (%),F1-Score (%),TP,FP,FN,TN
+Solution 1 (Structural Heuristics),72.47,65.11,86.69,74.36,599,321,92,488
+Solution 2 (Probabilistic ML Text),72.07,64.66,86.83,74.12,600,328,91,481
+Combined Hybrid Pipeline,68.73,61.28,87.26,72.0,603,381,88,428

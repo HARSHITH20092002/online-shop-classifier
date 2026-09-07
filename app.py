@@ -5,17 +5,20 @@ import pandas as pd
 import streamlit as st
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
+# Ensure root directory modules can be imported
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.scrapers.fetcher import fetch_website_content
 from src.models.classifier import ShopClassifier
 
+# Streamlit Page Configuration
 st.set_page_config(
     page_title="Online Shop Classifier",
     page_icon="🛍️",
     layout="wide"
 )
 
+# Sidebar Navigation
 st.sidebar.title("Navigation")
 mode = st.sidebar.radio(
     "Select View:", 
@@ -26,11 +29,14 @@ mode = st.sidebar.radio(
     ]
 )
 
+# Main Application Header
 st.title("🛍️ Online Shop Classifier")
-st.caption("Enterprise Market Discovery: Rule Heuristics + Probabilistic Scoring + Historical Recovery")
+st.caption("Enterprise Market Discovery Engine: Heuristics + Probabilistic Scoring + Historical Recovery")
 st.markdown("---")
 
+# ==============================================================================
 # VIEW 1: SINGLE DOMAIN ANALYSIS
+# ==============================================================================
 if mode == "Single Domain Analysis":
     st.subheader("Single Domain Inspection")
     
@@ -82,7 +88,9 @@ if mode == "Single Domain Analysis":
                 "confidence_score": pred.get("confidence")
             })
 
+# ==============================================================================
 # VIEW 2: BATCH DATASET RESULTS
+# ==============================================================================
 elif mode == "Batch Dataset Results":
     st.subheader("Batch Classification Records")
     
@@ -91,6 +99,7 @@ elif mode == "Batch Dataset Results":
 
     if files:
         files.sort(key=lambda x: 0 if "ALL" in x else 1)
+        
         selected_file = st.selectbox("📂 Select Processed File to Inspect:", files, index=0)
         csv_path = os.path.join(p_dir, selected_file)
         df = pd.read_csv(csv_path)
@@ -124,42 +133,64 @@ elif mode == "Batch Dataset Results":
             mime="text/csv"
         )
     else:
-        st.info("No processed batches found in `data/processed/`. Run `python main.py` or `python benchmark.py` in your terminal.")
+        st.info("No processed batches found in `data/processed/`.")
 
+# ==============================================================================
 # VIEW 3: MODEL BENCHMARK METRICS (1,500 DOMAINS)
+# ==============================================================================
 elif mode == "Model Benchmark Metrics (1,500 Domains)":
     st.subheader("📊 Comparative Performance Evaluation")
-    bm_path = os.path.join("data", "processed", "benchmark_results.csv")
+    
+    summary_path = os.path.join("data", "processed", "model_comparison_metrics.csv")
+    eval_path = os.path.join("data", "processed", "benchmark_results_evaluated.csv")
 
-    if os.path.exists(bm_path):
-        bdf = pd.read_csv(bm_path)
-        
-        y_true = bdf["ground_truth"].astype(str).str.lower().map({"true": True, "false": False, "1": True, "0": False, "1.0": True, "0.0": False})
-        y_pred = bdf["predicted_is_shop"].astype(str).str.lower().map({"true": True, "false": False, "1": True, "0": False, "1.0": True, "0.0": False})
+    if os.path.exists(summary_path):
+        summary_df = pd.read_csv(summary_path)
 
-        acc = accuracy_score(y_true, y_pred)
-        prec = precision_score(y_true, y_pred, zero_division=0)
-        rec = recall_score(y_true, y_pred, zero_division=0)
-        f1 = f1_score(y_true, y_pred, zero_division=0)
-        cm = confusion_matrix(y_true, y_pred, labels=[True, False])
+        # 1. Comparative Overview Table
+        st.markdown("#### 🏆 Performance Comparison: Solution 1 vs Solution 2 vs Hybrid")
+        st.dataframe(summary_df, use_container_width=True)
+        st.markdown("---")
+
+        # 2. Interactive Model Inspector
+        selected_model = st.selectbox(
+            "🔍 Select Model to Inspect Metrics & Confusion Matrix:",
+            summary_df["Model / Method"].tolist(),
+            index=0
+        )
+
+        model_row = summary_df[summary_df["Model / Method"] == selected_model].iloc[0]
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Overall Accuracy", f"{acc*100:.2f}%")
-        col2.metric("Precision", f"{prec*100:.2f}%")
-        col3.metric("Recall (Sensitivity)", f"{rec*100:.2f}%")
-        col4.metric("F1-Score", f"{f1*100:.2f}%")
+        col1.metric("Overall Accuracy", f"{model_row['Accuracy (%)']:.2f}%")
+        col2.metric("Precision", f"{model_row['Precision (%)']:.2f}%")
+        col3.metric("Recall (Sensitivity)", f"{model_row['Recall (%)']:.2f}%")
+        col4.metric("F1-Score", f"{model_row['F1-Score (%)']:.2f}%")
 
-        st.markdown("---")
-        st.markdown("#### Confusion Matrix Breakdown")
+        # 3. Dynamic Confusion Matrix
+        st.markdown(f"#### Confusion Matrix Breakdown — {selected_model}")
+        tp = int(model_row["TP"])
+        fp = int(model_row["FP"])
+        fn = int(model_row["FN"])
+        tn = int(model_row["TN"])
+
         cm_df = pd.DataFrame(
-            cm, 
+            [[tp, fn], [fp, tn]], 
             index=["Actual: SHOP (1)", "Actual: NOT A SHOP (0)"], 
             columns=["Predicted: SHOP (1)", "Predicted: NOT A SHOP (0)"]
         )
         st.table(cm_df)
 
-        st.markdown("#### Itemized Evaluation Records with Decision Reasons")
-        display_cols = [c for c in ["domain", "ground_truth", "predicted_is_shop", "classification_method", "data_source_used", "classification_reason"] if c in bdf.columns]
-        st.dataframe(bdf[display_cols], use_container_width=True)
+        # 4. Itemized Records
+        if os.path.exists(eval_path):
+            st.markdown("#### Itemized Evaluation Records with Decision Reasons")
+            eval_df = pd.read_csv(eval_path)
+            display_cols = [
+                c for c in [
+                    "domain", "ground_truth", "pred_solution_1", "pred_solution_2", 
+                    "pred_hybrid", "classification_method", "data_source_used", "classification_reason"
+                ] if c in eval_df.columns
+            ]
+            st.dataframe(eval_df[display_cols], use_container_width=True)
     else:
-        st.info("Benchmark file not generated yet. Run `python benchmark.py` in your terminal to evaluate 1,500 domains.")
+        st.warning("`model_comparison_metrics.csv` not found. Please ensure `python evaluate_benchmark.py` has completed successfully.")
