@@ -1,18 +1,54 @@
-# Python environment & cache
-venv/
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 
-# Local data files
-data/raw/*
-!data/raw/.gitkeep
-data/processed/*
-!data/processed/.gitkeep
+# C extensions
+*.so
 
-# IDE settings
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDE & Editor Settings
 .vscode/
-.DS_Store
-data/*.parquet
+.idea/
+*.swp
+*.swo
 
-data/*.csv
-*.csv
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Playwright browser cache
+.playwright/
+
+# Large raw datasets
+data/raw/
+*.parquet
+
+# Processed data: ignore general bulk files, but keep logged benchmark results
+data/processed/*
+!data/processed/model_comparison_metrics.csv
+!data/processed/benchmark_results_evaluated.csv
+!data/processed/benchmark_results.csv
