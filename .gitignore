@@ -52,3 +52,4 @@ data/processed/*
 !data/processed/model_comparison_metrics.csv
 !data/processed/benchmark_results_evaluated.csv
 !data/processed/benchmark_results.csv
+data/data.csv
