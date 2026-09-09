@@ -3,7 +3,6 @@ import sys
 import time
 import pandas as pd
 import streamlit as st
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
 # Ensure root directory modules can be imported
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -31,7 +30,7 @@ mode = st.sidebar.radio(
 
 # Main Application Header
 st.title("🛍️ Online Shop Classifier")
-st.caption("Enterprise Market Discovery Engine: Heuristics + Probabilistic Scoring + Historical Recovery")
+st.caption("Domain Classification Engine: Heuristics + Probabilistic Text Scoring + Historical Recovery")
 st.markdown("---")
 
 # ==============================================================================
@@ -42,7 +41,7 @@ if mode == "Single Domain Analysis":
     
     url_input = st.text_input(
         "Enter Web Domain / URL:", 
-        placeholder="e.g., temu.com, weldom.fr, facebook.com/marketplace"
+        placeholder="e.g., temu.com, weldom.fr, facebook.com"
     )
     
     if st.button("Classify Domain", type="primary"):
@@ -60,18 +59,16 @@ if mode == "Single Domain Analysis":
                 pred = classifier.predict(fetched)
                 elapsed = time.time() - start_t
 
-            col1, col2, col3, col4 = st.columns(4)
+            # Re-balanced 3-column metric layout without confidence score
+            col1, col2, col3 = st.columns(3)
             with col1:
                 if pred.get("is_shop", False):
                     st.success(f"**Result: {pred.get('result', 'SHOP')}**")
                 else:
                     st.error(f"**Result: {pred.get('result', 'NOT A SHOP')}**")
             with col2:
-                conf = pred.get("confidence", 0.0) * 100
-                st.metric("Confidence Score", f"{conf:.0f}%")
-            with col3:
                 st.metric("Data Source", fetched.get("data_source", "Live DOM"))
-            with col4:
+            with col3:
                 st.metric("Latency", f"{elapsed:.2f}s")
 
             st.markdown("---")
@@ -84,8 +81,7 @@ if mode == "Single Domain Analysis":
                 "is_reachable": fetched.get("is_reachable", False),
                 "http_status_code": fetched.get("status_code", 0),
                 "method_executed": pred.get("method"),
-                "classification_reason": pred.get("reason"),
-                "confidence_score": pred.get("confidence")
+                "classification_reason": pred.get("reason")
             })
 
 # ==============================================================================
@@ -101,8 +97,12 @@ elif mode == "Batch Dataset Results":
         files.sort(key=lambda x: 0 if "ALL" in x else 1)
         
         selected_file = st.selectbox("📂 Select Processed File to Inspect:", files, index=0)
-        csv_path = os.path.join(p_dir, selected_file)
-        df = pd.read_csv(csv_path)
+        df = pd.read_csv(os.path.join(p_dir, selected_file))
+        
+        # Filter out confidence columns if present in historical batch files
+        conf_cols = [c for c in df.columns if "conf" in c.lower()]
+        if conf_cols:
+            df = df.drop(columns=conf_cols)
         
         if "dataset_examined" in df.columns:
             st.info(f"**Examined Scope:** `{df['dataset_examined'].iloc[0]}` | **File Loaded:** `{selected_file}`")
@@ -125,10 +125,9 @@ elif mode == "Batch Dataset Results":
         st.markdown("---")
         st.dataframe(df, use_container_width=True)
         
-        csv_data = df.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Download Selected Classification CSV",
-            data=csv_data,
+            data=df.to_csv(index=False).encode('utf-8'),
             file_name=selected_file,
             mime="text/csv"
         )
@@ -147,7 +146,7 @@ elif mode == "Model Benchmark Metrics (1,500 Domains)":
     if os.path.exists(summary_path):
         summary_df = pd.read_csv(summary_path)
 
-        # 1. Comparative Overview Table
+        # 1. Comparative Performance Overview Table
         st.markdown("#### 🏆 Performance Comparison: Solution 1 vs Solution 2 vs Hybrid")
         st.dataframe(summary_df, use_container_width=True)
         st.markdown("---")
@@ -169,22 +168,24 @@ elif mode == "Model Benchmark Metrics (1,500 Domains)":
 
         # 3. Dynamic Confusion Matrix
         st.markdown(f"#### Confusion Matrix Breakdown — {selected_model}")
-        tp = int(model_row["TP"])
-        fp = int(model_row["FP"])
-        fn = int(model_row["FN"])
-        tn = int(model_row["TN"])
-
         cm_df = pd.DataFrame(
-            [[tp, fn], [fp, tn]], 
+            [[int(model_row["TP"]), int(model_row["FN"])], 
+             [int(model_row["FP"]), int(model_row["TN"])]], 
             index=["Actual: SHOP (1)", "Actual: NOT A SHOP (0)"], 
             columns=["Predicted: SHOP (1)", "Predicted: NOT A SHOP (0)"]
         )
         st.table(cm_df)
 
-        # 4. Itemized Records
+        # 4. Itemized Evaluation Records
         if os.path.exists(eval_path):
             st.markdown("#### Itemized Evaluation Records with Decision Reasons")
             eval_df = pd.read_csv(eval_path)
+            
+            # Remove any confidence columns from inspection view
+            conf_cols_eval = [c for c in eval_df.columns if "conf" in c.lower()]
+            if conf_cols_eval:
+                eval_df = eval_df.drop(columns=conf_cols_eval)
+
             display_cols = [
                 c for c in [
                     "domain", "ground_truth", "pred_solution_1", "pred_solution_2", 
@@ -193,4 +194,4 @@ elif mode == "Model Benchmark Metrics (1,500 Domains)":
             ]
             st.dataframe(eval_df[display_cols], use_container_width=True)
     else:
-        st.warning("`model_comparison_metrics.csv` not found. Please ensure `python evaluate_benchmark.py` has completed successfully.")
+        st.warning("`model_comparison_metrics.csv` not found. Please run `python evaluate_benchmark.py` first.")
